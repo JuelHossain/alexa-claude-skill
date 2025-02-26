@@ -49,6 +49,30 @@ async function runCliTests() {
         process.exit(0);
     } catch (error) {
         logger.error('CLI test error', error);
+        console.error(error);
+        process.exit(1);
+    }
+}
+
+// Test mode function
+async function runTest(question) {
+    try {
+        logger.info('Running test with question:', { question });
+        
+        const response = await TestUtils.testIntent('AskClaudeIntent', question);
+        const speech = getSpeechFromResponse(response);
+        
+        logger.info('Claude response:', { speech });
+        
+        // Clean up SSML tags for console output
+        const cleanSpeech = speech ? speech.replace(/<[^>]*>/g, '') : 'No response';
+        console.log('\nQuestion:', question);
+        console.log('Answer:', cleanSpeech);
+        
+        process.exit(0);
+    } catch (error) {
+        logger.error('Test error', error);
+        console.error(error);
         process.exit(1);
     }
 }
@@ -62,58 +86,49 @@ function startServer() {
     app.use(express.static(path.join(__dirname, 'public')));
     app.use(express.json());
     
-    // API endpoints
-    app.post('/api/test/launch', async (req, res) => {
-        try {
-            const response = await TestUtils.testIntent('LaunchRequest');
-            res.json(response);
-        } catch (error) {
-            logger.error('Launch test error', error);
-            res.status(500).json({ error: error.message });
-        }
-    });
-    
-    app.post('/api/test/claude', async (req, res) => {
+    // API endpoint for testing the skill
+    app.post('/api/ask', async (req, res) => {
         try {
             const { question } = req.body;
+            
+            if (!question) {
+                return res.status(400).json({ error: 'Question is required' });
+            }
+            
+            logger.info('Web request received', { question });
+            
             const response = await TestUtils.testIntent('AskClaudeIntent', question);
-            res.json(response);
+            const speech = getSpeechFromResponse(response);
+            
+            // Clean up SSML tags for web display
+            const cleanSpeech = speech ? speech.replace(/<[^>]*>/g, '') : 'No response';
+            
+            return res.json({ 
+                question, 
+                answer: cleanSpeech,
+                rawResponse: response
+            });
         } catch (error) {
-            logger.error('Claude test error', error);
-            res.status(500).json({ error: error.message });
+            logger.error('API error', error);
+            return res.status(500).json({ error: error.message });
         }
     });
     
-    app.post('/api/test/help', async (req, res) => {
-        try {
-            const response = await TestUtils.testIntent('AMAZON.HelpIntent');
-            res.json(response);
-        } catch (error) {
-            logger.error('Help test error', error);
-            res.status(500).json({ error: error.message });
-        }
-    });
-    
-    app.post('/api/test/stop', async (req, res) => {
-        try {
-            const response = await TestUtils.testIntent('AMAZON.StopIntent');
-            res.json(response);
-        } catch (error) {
-            logger.error('Stop test error', error);
-            res.status(500).json({ error: error.message });
-        }
-    });
-    
-    // Start server
+    // Start the server
     app.listen(port, () => {
         logger.info(`Server running at http://localhost:${port}`);
-        logger.info(`Access the web tester at http://localhost:${port}/index.html`);
+        logger.info(`Test the skill at http://localhost:${port}/index.html`);
     });
 }
 
 // Determine which mode to run
 if (process.argv.includes('cli')) {
     runCliTests();
+} else if (process.argv.includes('test')) {
+    // Get the question from the arguments (everything after "test")
+    const testIndex = process.argv.indexOf('test');
+    const question = process.argv[testIndex + 1] || 'What is artificial intelligence?';
+    runTest(question);
 } else if (process.argv.includes('server')) {
     startServer();
 } else {

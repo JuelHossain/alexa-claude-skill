@@ -47,14 +47,15 @@ try {
         )
         .addRequestInterceptors(requestInterceptor)
         .addResponseInterceptors(responseInterceptor)
-        .addErrorHandlers(errorHandler)
-        .create();
+        .addErrorHandlers(errorHandler);
     
     // Export the lambda handler
-    exports.handler = skillBuilder.lambda();
+    exports.handler = async (event) => {
+        return skillBuilder.create().invoke(event);
+    };
     
     // For local testing, create a non-lambda handler
-    exports.localHandler = (event) => {
+    exports.localHandler = async (event) => {
         return skillBuilder.create().invoke(event);
     };
     
