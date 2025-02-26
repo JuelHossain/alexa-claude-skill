@@ -1,0 +1,50 @@
+{
+    "manifest": {
+        "publishingInformation": {
+            "locales": {
+                "en-US": {
+                    "summary": "Ask questions to Claude AI through Alexa",
+                    "examplePhrases": [
+                        "Alexa, ask Claude what is artificial intelligence",
+                        "Alexa, ask Claude about the solar system",
+                        "Alexa, ask Claude how to make pasta"
+                    ],
+                    "keywords": [
+                        "AI",
+                        "Claude",
+                        "Questions",
+                        "Knowledge"
+                    ],
+                    "name": "Claude AI Assistant",
+                    "description": "Ask questions to Claude AI and get intelligent responses through your Alexa device"
+                }
+            },
+            "isAvailableWorldwide": true,
+            "testingInstructions": "Sample questions are provided in the example phrases",
+            "category": "KNOWLEDGE_AND_TRIVIA",
+            "distributionCountries": []
+        },
+        "apis": {
+            "custom": {
+                "endpoint": {
+                    "uri": "ask-custom-claude-ai-default"
+                }
+            }
+        },
+        "manifestVersion": "1.0",
+        "permissions": [],
+        "privacyAndCompliance": {
+            "allowsPurchases": false,
+            "locales": {
+                "en-US": {
+                    "privacyPolicyUrl": "",
+                    "termsOfUseUrl": ""
+                }
+            },
+            "isExportCompliant": true,
+            "containsAds": false,
+            "isChildDirected": false,
+            "usesPersonalInfo": false
+        }
+    }
+}
