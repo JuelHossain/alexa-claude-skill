@@ -8,8 +8,12 @@ require('dotenv').config();
 // Core dependencies
 const Alexa = require('ask-sdk-core');
 
-// Import configuration
-const environment = require('./config/environment');
+// Import configuration and container
+const config = require('./config');
+const container = require('./lib/container');
+
+// Get the logger service from the container
+const logger = container.get('loggerService');
 
 // Import handlers
 const {
@@ -29,21 +33,10 @@ const {
 // Import error handler
 const { errorHandler } = require('./utils/errorHandler');
 
-// Initialize environment
+// Initialize skill
 try {
-    console.log('Starting environment initialization...');
-    environment.initialize();
-    console.log('Environment initialization completed successfully');
-} catch (error) {
-    console.error('Error during environment initialization:', error);
-    console.error('Error stack:', error.stack);
-}
-
-/**
- * Lambda handler function
- */
-try {
-    console.log('Building Alexa skill...');
+    logger.info('Building Alexa skill...');
+    
     const skillBuilder = Alexa.SkillBuilders.custom()
         .addRequestHandlers(
             launchHandler,
@@ -54,32 +47,34 @@ try {
         )
         .addRequestInterceptors(requestInterceptor)
         .addResponseInterceptors(responseInterceptor)
-        .addErrorHandlers(errorHandler);
+        .addErrorHandlers(errorHandler)
+        .create();
     
-    // For AWS Lambda environment
+    // Export the lambda handler
     exports.handler = skillBuilder.lambda();
     
     // For local testing, create a non-lambda handler
-    exports.localHandler = async function(event) {
+    exports.localHandler = (event) => {
         return skillBuilder.create().invoke(event);
     };
     
-    console.log('Alexa skill built successfully');
+    logger.info('Alexa skill built successfully');
 } catch (error) {
-    console.error('Error building Alexa skill:', error);
-    console.error('Error stack:', error.stack);
+    logger.error('Error building Alexa skill', error);
+    
     // Provide a fallback handler that returns an error response
     exports.handler = async (event) => {
-        console.error('Using fallback handler due to initialization error');
         return {
             version: '1.0',
             response: {
                 outputSpeech: {
                     type: 'SSML',
-                    ssml: '<speak>Sorry, there was an error initializing the skill. Please try again later.</speak>'
+                    ssml: '<speak>Sorry, there was an error initializing this skill. Please try again later.</speak>'
                 },
                 shouldEndSession: true
             }
         };
     };
+    
+    exports.localHandler = exports.handler;
 }

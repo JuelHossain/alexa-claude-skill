@@ -6,31 +6,12 @@
 
 require('dotenv').config();
 const express = require('express');
-const fs = require('fs');
 const path = require('path');
-const { localHandler } = require('./index');
+const TestUtils = require('./utils/testUtils');
+const container = require('./lib/container');
 
-// If localHandler is not available, fall back to the regular handler
-const handler = localHandler || require('./index').handler;
-
-// Create logs directory if it doesn't exist
-const logsDir = path.join(__dirname, 'logs');
-if (!fs.existsSync(logsDir)) {
-    fs.mkdirSync(logsDir);
-}
-
-// Initialize logger
-const logFile = path.join(logsDir, `test-${new Date().toISOString().replace(/:/g, '-')}.log`);
-fs.writeFileSync(logFile, '=== Alexa Skill Test Logs ===\n\n');
-
-function log(message) {
-    const timestamp = new Date().toISOString();
-    const logMessage = `${timestamp}: ${message}\n`;
-    fs.appendFileSync(logFile, logMessage);
-    console.log('-----------------------------------');
-    console.log(message);
-    console.log('-----------------------------------');
-}
+// Get logger
+const logger = container.get('loggerService');
 
 // Helper function to safely extract speech from response
 function getSpeechFromResponse(response) {
@@ -52,272 +33,90 @@ function getSpeechFromResponse(response) {
     return null;
 }
 
-// Create test requests
-function createTestRequest(type, intentName = null, questionText = null) {
-    const request = {
-        version: '1.0',
-        session: {
-            new: type === 'LaunchRequest',
-            sessionId: `test-session-${Date.now()}`,
-            application: { applicationId: 'amzn1.ask.skill.test-skill-id' },
-            user: { userId: 'test-user-id' }
-        },
-        context: {
-            System: {
-                application: {
-                    applicationId: 'amzn1.ask.skill.test-skill-id'
-                },
-                user: {
-                    userId: 'test-user-id'
-                }
-            }
-        },
-        request: type === 'LaunchRequest' 
-            ? {
-                type: 'LaunchRequest',
-                requestId: `test-${Date.now()}`,
-                timestamp: new Date().toISOString(),
-                locale: 'en-US'
-            }
-            : {
-                type: 'IntentRequest',
-                requestId: `test-${Date.now()}`,
-                timestamp: new Date().toISOString(),
-                locale: 'en-US',
-                intent: {
-                    name: intentName,
-                    slots: questionText ? {
-                        question: {
-                            name: 'question',
-                            value: questionText
-                        }
-                    } : {}
-                }
-            }
-    };
-    return request;
-}
-
-// CLI mode functions
+// CLI mode function
 async function runCliTests() {
     try {
-        log('=== Starting CLI Tests ===');
+        const args = process.argv.slice(2);
+        const questionText = args[0] || 'What is artificial intelligence?';
         
-        // Verify handler is a function
-        if (typeof handler !== 'function') {
-            log('ERROR: handler is not a function. Type: ' + typeof handler);
-            log('Handler value: ' + JSON.stringify(handler));
-            return;
-        }
+        logger.info('Running CLI test with question:', { question: questionText });
         
-        // Test 1: Launch Request
-        log('\nTesting Launch Request...');
-        try {
-            const launchRequest = createTestRequest('LaunchRequest');
-            log('Launch Request:');
-            log(JSON.stringify(launchRequest, null, 2));
-            
-            const launchResponse = await handler(launchRequest);
-            log('Launch Response:');
-            log(JSON.stringify(launchResponse, null, 2));
-            
-            const speech = getSpeechFromResponse(launchResponse);
-            if (speech) {
-                log('Launch Speech: ' + speech);
-            } else {
-                log('ERROR: Invalid launch response structure:');
-                log(JSON.stringify(launchResponse, null, 2));
-            }
-        } catch (error) {
-            log(`Error during launch request: ${error}`);
-            log(`Error stack: ${error.stack}`);
-        }
-
-        // Test 2: Help Intent
-        log('\nTesting Help Intent...');
-        try {
-            const helpRequest = createTestRequest('IntentRequest', 'AMAZON.HelpIntent');
-            const helpResponse = await handler(helpRequest);
-            log('Help Response:');
-            log(JSON.stringify(helpResponse, null, 2));
-            
-            const speech = getSpeechFromResponse(helpResponse);
-            if (speech) {
-                log('Help Speech: ' + speech);
-            } else {
-                log('ERROR: Invalid help response structure:');
-                log(JSON.stringify(helpResponse, null, 2));
-            }
-        } catch (error) {
-            log(`Error during help request: ${error}`);
-            log(`Error stack: ${error.stack}`);
-        }
-
-        // Test 3: Ask Claude Intent
-        const testQuestion = process.argv[2] || 'What is artificial intelligence?';
-        log(`\nTesting Ask Claude Intent with question: "${testQuestion}"...`);
-        try {
-            const askRequest = createTestRequest('IntentRequest', 'AskClaudeIntent', testQuestion);
-            const askResponse = await handler(askRequest);
-            log('Claude Response:');
-            log(JSON.stringify(askResponse, null, 2));
-            
-            const speech = getSpeechFromResponse(askResponse);
-            if (speech) {
-                log('Claude Speech: ' + speech);
-            } else {
-                log('ERROR: Invalid Claude response structure:');
-                log(JSON.stringify(askResponse, null, 2));
-            }
-        } catch (error) {
-            log(`Error during Claude request: ${error}`);
-            log(`Error stack: ${error.stack}`);
-        }
-
-        // Test 4: Stop Intent
-        log('\nTesting Stop Intent...');
-        try {
-            const stopRequest = createTestRequest('IntentRequest', 'AMAZON.StopIntent');
-            const stopResponse = await handler(stopRequest);
-            log('Stop Response:');
-            log(JSON.stringify(stopResponse, null, 2));
-            
-            const speech = getSpeechFromResponse(stopResponse);
-            if (speech) {
-                log('Stop Speech: ' + speech);
-            } else {
-                log('ERROR: Invalid stop response structure:');
-                log(JSON.stringify(stopResponse, null, 2));
-            }
-        } catch (error) {
-            log(`Error during stop request: ${error}`);
-            log(`Error stack: ${error.stack}`);
-        }
-
-        log('\nAll tests completed!');
+        const response = await TestUtils.testIntent('AskClaudeIntent', questionText);
+        const speech = getSpeechFromResponse(response);
+        
+        logger.info('Claude response:', { speech });
+        
+        process.exit(0);
     } catch (error) {
-        log(`Error during testing: ${error}`);
-        log(`Error stack: ${error.stack}`);
+        logger.error('CLI test error', error);
+        process.exit(1);
     }
 }
 
 // Express server mode
-const app = express();
-const port = process.env.PORT || 3001;
-
-app.use(express.json());
-app.use(express.static('public'));
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Request logging middleware
-app.use((req, res, next) => {
-    log(`${req.method} ${req.path}`);
-    next();
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-    log(`Error: ${err.stack}`);
-    res.status(500).json({ error: err.message });
-});
-
-// Test endpoints
-app.post('/test/launch', async (req, res) => {
-    try {
-        log('Testing Launch Request from web');
-        const request = createTestRequest('LaunchRequest');
-        const response = await handler(request);
-        const speech = getSpeechFromResponse(response);
-        log(`Launch Response: ${speech || 'No speech found'}`);
-        res.json(response);
-    } catch (error) {
-        log(`Launch Error: ${error}`);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/test/ask', async (req, res) => {
-    try {
-        const { question } = req.body;
-        log(`Testing Ask Claude Intent from web with question: ${question}`);
-        const request = createTestRequest('IntentRequest', 'AskClaudeIntent', question);
-        const response = await handler(request);
-        const speech = getSpeechFromResponse(response);
-        log(`Ask Claude Response: ${speech || 'No speech found'}`);
-        res.json(response);
-    } catch (error) {
-        log(`Ask Claude Error: ${error}`);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/test/help', async (req, res) => {
-    try {
-        log('Testing Help Intent from web');
-        const request = createTestRequest('IntentRequest', 'AMAZON.HelpIntent');
-        const response = await handler(request);
-        const speech = getSpeechFromResponse(response);
-        log(`Help Response: ${speech || 'No speech found'}`);
-        res.json(response);
-    } catch (error) {
-        log(`Help Error: ${error}`);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/test/stop', async (req, res) => {
-    try {
-        log('Testing Stop Intent from web');
-        const request = createTestRequest('IntentRequest', 'AMAZON.StopIntent');
-        const response = await handler(request);
-        const speech = getSpeechFromResponse(response);
-        log(`Stop Response: ${speech || 'No speech found'}`);
-        res.json(response);
-    } catch (error) {
-        log(`Stop Error: ${error}`);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// Decide whether to run CLI mode or server mode
-const runMode = process.argv[3] || 'server';
-
-if (runMode === 'cli') {
-    runCliTests();
-} else {
-    // Start server with error handling
-    try {
-        const server = app.listen(port, () => {
-            log(`Test server running at http://localhost:${port}`);
-            log(`Access the web tester at http://localhost:${port}/index.html`);
-        });
-
-        server.on('error', (error) => {
-            log(`Server error: ${error}`);
-            if (error.code === 'EADDRINUSE') {
-                log(`Port ${port} is already in use. Please try a different port or close the application using this port.`);
-            }
-        });
-
-        process.on('uncaughtException', (error) => {
-            log(`Uncaught Exception: ${error}`);
-        });
-
-        process.on('unhandledRejection', (reason, promise) => {
-            log(`Unhandled Rejection at: ${promise}, reason: ${reason}`);
-        });
-    } catch (error) {
-        log(`Failed to start server: ${error}`);
-    }
+function startServer() {
+    const app = express();
+    const port = process.env.PORT || 3001;
+    
+    // Serve static files
+    app.use(express.static(path.join(__dirname, 'public')));
+    app.use(express.json());
+    
+    // API endpoints
+    app.post('/api/test/launch', async (req, res) => {
+        try {
+            const response = await TestUtils.testIntent('LaunchRequest');
+            res.json(response);
+        } catch (error) {
+            logger.error('Launch test error', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+    
+    app.post('/api/test/claude', async (req, res) => {
+        try {
+            const { question } = req.body;
+            const response = await TestUtils.testIntent('AskClaudeIntent', question);
+            res.json(response);
+        } catch (error) {
+            logger.error('Claude test error', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+    
+    app.post('/api/test/help', async (req, res) => {
+        try {
+            const response = await TestUtils.testIntent('AMAZON.HelpIntent');
+            res.json(response);
+        } catch (error) {
+            logger.error('Help test error', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+    
+    app.post('/api/test/stop', async (req, res) => {
+        try {
+            const response = await TestUtils.testIntent('AMAZON.StopIntent');
+            res.json(response);
+        } catch (error) {
+            logger.error('Stop test error', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+    
+    // Start server
+    app.listen(port, () => {
+        logger.info(`Server running at http://localhost:${port}`);
+        logger.info(`Access the web tester at http://localhost:${port}/index.html`);
+    });
 }
 
-// Export functions for potential use in other test scripts
-module.exports = {
-    createTestRequest,
-    log
-};
+// Determine which mode to run
+if (process.argv.includes('cli')) {
+    runCliTests();
+} else if (process.argv.includes('server')) {
+    startServer();
+} else {
+    logger.info('No mode specified, defaulting to server mode');
+    startServer();
+}
